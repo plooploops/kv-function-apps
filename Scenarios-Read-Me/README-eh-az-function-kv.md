@@ -101,7 +101,7 @@ $ehsecretURI = $(az keyvault secret show --name EventHubConnection --vault-name 
 az functionapp config appsettings set --name myfunctionapp --resource-group myResourceGroup --settings "my_RootManageSharedAccessKey_EVENTHUB=@Microsoft.KeyVault(SecretUri=$ehsecretURI) "
 ```
 
-We can also get the storage account and add a placeholder in the functino app for storage account access.
+We can also get the storage account and add a placeholder in the function app for storage account access.
 ```powershell
 #storage account for function app
 $saKey = $(az storage account keys list -n mystorageaccount -g myResourceGroup --query [0].value --output tsv)
@@ -156,12 +156,16 @@ Be sure to install the latest version of [Azure Functions Core Tools](https://gi
 
 > Work Around for Azure Functions Core Tools for Chocolatey install path: https://github.com/Azure/azure-functions-core-tools/issues/693#issuecomment-533713275.
 >  1. Run choco uninstall azure-functions-core-tools
->  2. Download nupkg file from [here](https://chocolatey.org/packages/azure-functions-core-tools) (see the Download link)
->  3. Open the nupkg in Package Explorer and edit the **tools\chocolateyinstall.ps1** script (change **x86** to **x64** in the package URL).
+>  2. Download nupkg file from [here](https://chocolatey.org/packages/azure-functions-core-tools) (see the [Download Link for nupkg for Azure Functions Core Tools](https://chocolatey.org/api/v2/package/azure-functions-core-tools/2.7.1724)).
+>  3. Open the nupkg in Package Explorer and edit the **tools\chocolateyinstall.ps1** script (change **x86** to **x64** in the package URL).  Be sure to save the nupkg with the changes!
 >  ```powershell
 >  choco install nugetpackageexplorer
 >  ```
->  4. Run choco install azure-functions-core-tools -source . **--ignore-checksums** in the folder where edited nupkg file is.  We can download the [nupkg for Azure Functions Core Tools](https://chocolatey.org/api/v2/package/azure-functions-core-tools/2.7.1724)
+>  4. Run this command in the folder where edited nupkg file is, and be sure to ignore the checksums since we did not make an update to the checksum but instead edited the URL for the nupkg.
+>  ```powershell
+>  choco install azure-functions-core-tools -source . --ignore-checksums
+>  ```  
+>  
   
 Assuming we have a **local.settings.json** file associated with the function app, we can fill in the details and rely on the functions core tools runtime to debug locally:
 
