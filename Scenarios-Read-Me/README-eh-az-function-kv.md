@@ -207,13 +207,13 @@ We can also navigate to the function app and click on 'run' to do a test call to
 
 ![Validate Azure Function KV Reference In Portal](../Media/scenario-eh-az-function-kv/validate-4.png 'Validate Azure Function KV Reference In Portal')
 
-We can also use [Azure Storage Explorer](https://azure.microsoft.com/en-us/features/storage-explorer/), and assuming that our diagnostic settings have flowed through, we can point to the blob container with the Metrics for Key Vault.
-
-![Validate Azure KV Metrics in Storage Explorer](../Media/scenario-eh-az-function-kv/validate-5.png 'Validate Azure KV Metrics in Storage Explorer')
-
 We can check on the Key Vault Diagnostic Setting and see if we have storage accounts set up.  We could also point to event hub or log analytics.
 
 ![Validate Key Vault Diagnostic Setting In Portal](../Media/scenario-eh-az-function-kv/validate-5.1.png 'Validate Key Vault Diagnostic Setting In Portal')
+
+We can also use [Azure Storage Explorer](https://azure.microsoft.com/en-us/features/storage-explorer/), and assuming that our diagnostic settings have flowed through, we can point to the blob container with the Metrics for Key Vault.
+
+![Validate Azure KV Metrics in Storage Explorer](../Media/scenario-eh-az-function-kv/validate-5.png 'Validate Azure KV Metrics in Storage Explorer')
 
 We should be able to see a payload similar to this in the JSON file.
 ```JSON
@@ -234,4 +234,4 @@ az group delete -n myResourceGroup
 
 Based on this test, we can see the function app will pick up the settings from Key Vault whenever the function app cycles for scaling operations.  Since these secrets will be securely cached we can reuse the secrets in the function without hitting key vault again.
 
-While this approach will help reduce calls to KeyVault, there could be a case with multiple apps refreshing from Key Vault at the same time; whether this solution will fit needs to take into consideration the greater system / solution.  This is definitely a first step that can be taken but there's other approaches that would need to account for the project's needs and constraints.
+While this approach will help reduce calls to KeyVault, there could be a case with multiple apps refreshing from Key Vault at the same time; whether this solution will fit needs to take into consideration the greater system / solution.  This is definitely a first step that can be taken but there's other approaches that can be taken given a project's needs and constraints.
