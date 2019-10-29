@@ -27,8 +27,6 @@ These will describe some of the concepts that we're using in this scenario.
 1. [Service Bus Explorer](https://github.com/paolosalvatori/ServiceBusExplorer)
 1. [Azure Storage Explorer](https://azure.microsoft.com/en-us/features/storage-explorer/)
 1. [Generate Random Letters in Powershell](https://devblogs.microsoft.com/scripting/generate-random-letters-with-powershell/)
-1. [Azure Function Deployments Automation](https://docs.microsoft.com/en-us/azure/azure-functions/functions-infrastructure-as-code)
-1. [Azure Functions Zip Deployment](https://docs.microsoft.com/en-us/azure/azure-functions/deployment-zip-push)
 1. [Azure Functions Core Tools](https://github.com/Azure/azure-functions-core-tools)
 1. [Azure Functions Extension](https://github.com/Microsoft/vscode-azurefunctions/wiki)
 
@@ -45,7 +43,7 @@ az account set -s <subscription id>
 
 For reference we can use this [deployment script](../Scenarios/eh-az-function-kv/deploy.ps1) from the project root directory to stand up the components for this exercise.
 
-We can create a resource group, a storage account, and a function app with an app service plan.
+We can create a resource group, a storage account, and a function app with an app service plan.  We will also assign a managed identity to the function app.
 
 ```powershell
 az group create -n myResourceGroup -l westus
@@ -59,7 +57,7 @@ az functionapp create --name myfunctionapp --resource-group myResourceGroup --pl
 az functionapp identity assign --name myfunctionapp --resource-group myResourceGroup
 ```
 
-We can then get a service principal for the function app, and then grant access to a key vault to that service principal.  We'll then add a secret in key vault to use later.
+We can then get a service principal, which in this case is a managed identity for the function app, and then grant access to a key vault to that service principal.  We'll then add a secret in key vault to use later.
 
 ```powershell
 #get service principal ID attached to function app
@@ -154,10 +152,6 @@ func azure functionapp publish $faName
 
 We're also going to assume that we can use VS Code with the Azure Functions extension installed too.  We'll also want to clone this repo to pull in the sample function.
 
-```powershell
-git clone https://github.com/plooploops/kv-function-apps
-```
-
 Be sure to install the latest version of [Azure Functions Core Tools](https://github.com/Azure/azure-functions-core-tools).
 
 > Work Around for Azure Functions Core Tools for Chocolatey install path: https://github.com/Azure/azure-functions-core-tools/issues/693#issuecomment-533713275.
@@ -165,7 +159,7 @@ Be sure to install the latest version of [Azure Functions Core Tools](https://gi
 >  2. Download nupkg file from [here](https://chocolatey.org/packages/azure-functions-core-tools) (see the Download link)
 >  3. Open the nupkg in Package Explorer and edit the **tools\chocolateyinstall.ps1** script (change **x86** to **x64** in the package URL).
 >  ```powershell
->  choco install nugetpacakageexplorer
+>  choco install nugetpackageexplorer
 >  ```
 >  4. Run choco install azure-functions-core-tools -source . **--ignore-checksums** in the folder where edited nupkg file is.  We can download the [nupkg for Azure Functions Core Tools](https://chocolatey.org/api/v2/package/azure-functions-core-tools/2.7.1724)
   
@@ -186,7 +180,6 @@ Assuming we have a **local.settings.json** file associated with the function app
 We can set a break point in the function, and then hit F5 in VSCode.  We can also use [Service Bus Explorer](https://github.com/paolosalvatori/ServiceBusExplorer) and pass in the [Azure Event Hub Connection String](https://docs.microsoft.com/en-us/azure/event-hubs/event-hubs-get-connection-string) to send an event to the event hub to trigger the function.
 
 ![Event Hub triggered Azure Function Debugging](../Media/scenario-eh-az-function-kv/debug.png 'Event Hub Triggered Azure Function Debugging')
-
 
 ### Validate The Scenario
 
