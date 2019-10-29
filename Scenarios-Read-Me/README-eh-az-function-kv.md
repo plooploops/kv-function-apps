@@ -207,7 +207,8 @@ We can also use [Azure Storage Explorer](https://azure.microsoft.com/en-us/featu
 
 ![Validate Azure KV Metrics in Storage Explorer](../Media/scenario-eh-az-function-kv/validate-5.png 'Validate Azure KV Metrics in Storage Explorer')
 
-Navigate to the deploy web app (Azure App Service).  We'll also want to open up a new tab to [Access the Kudu Service](https://github.com/projectkudu/kudu/wiki/Accessing-the-kudu-service); we can use https://mywebapp.scm.azurewebsites.net/ to login.
+We can check on the Key Vault Diagnostic Setting and see if we have storage accounts set up.  We could also point to event hub or log analytics.
+![Validate Key Vault Diagnostic Setting In Portal](../Media/scenario-eh-az-function-kv/validate-5.1.png 'Validate Key Vault Diagnostic Setting In Portal')
 
 We should be able to see a payload similar to this in the JSON file.
 ```JSON
