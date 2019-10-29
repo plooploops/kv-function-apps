@@ -81,7 +81,8 @@ az monitor diagnostic-settings create --resource $kvID -n $kvMonitorName --stora
 
 #Another option is for Azure Monitor to stream to Event Hub
 #get event hub reference
-#$ehID = $(az eventhubs eventhub show -g $rg --namespace-name $ehNamespace -n $ehName --query id --output tsv)
+#az eventhubs eventhub create --resource-group $rg --namespace-name $ehNamespace --name monitoring-sample --message-retention 4 --partition-count 15
+#$ehID = $(az eventhubs eventhub show -g $rg --namespace-name $ehNamespace -n monitoring-sample --query id --output tsv)
 #az monitor diagnostic-settings create --resource $kvID -n $kvMonitorName --event-hub $ehID --event-hub-rule RootManageSharedAccessKey --storage-account $saID --logs $logJSON --metrics $metricJSON
 
 #deploy azure function https://github.com/Azure/azure-functions-core-tools
