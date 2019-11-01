@@ -142,7 +142,7 @@ az monitor diagnostic-settings create --resource $kvID -n monitoring-my-kv --eve
 
 We can use the [Azure Functions Core Tools](https://github.com/Azure/azure-functions-core-tools) to now deploy the function app.  We should run this from the project root directory.
 
-> Note that if we end up publishing while the function app is stil cycling, we may get 400 response codes.  Wait for the function app to finish cycling, which can also manually restart in the Azure Portal for the function app.
+> Note that if we end up publishing while the function app is still cycling, we may get 400 response codes.  Wait for the function app to finish cycling, which can also manually restart in the Azure Portal for the function app.
 
 ```powershell
 #deploy azure function https://github.com/Azure/azure-functions-core-tools
@@ -227,7 +227,7 @@ Of course, we can also send a batch of messages to Event Hub to trigger the Azur
 
 Let's also double check that we see how the secrets are pulled into the [Event Hub Triggered Function](../EventHubTriggerCSharp1.cs).
 
-Since the app settings has a Key Vault reference, the function app will resolve this as part of scaling operations.  So we can pull in the cached value in the function.
+Since the app settings has a Key Vault reference, the function app will resolve this as part of scaling operations.  This means we can pull in the cached value in the function.
 
 ```C#
 //This will pull the secret from the environment variable.  In the case of a function app this will pull from the app settings.
@@ -235,29 +235,32 @@ private static string superSecret = System.Environment.GetEnvironmentVariable("S
 ```
 
 We can experiment with retrieving the cached secret.  Given that we have the Key Vault metrics stored, we can check the count for how often Key Vault is getting called.  Again, this could be verified with checking from Storage explorer.
+
 ```C#
- foreach (EventData eventData in events)
-            {
-                try
-                {
-                    string messageBody = Encoding.UTF8.GetString(eventData.Body.Array, eventData.Body.Offset, eventData.Body.Count);
+foreach (EventData eventData in events)
+{
+    try
+    {
+        string messageBody = Encoding.UTF8.GetString(eventData.Body.Array, eventData.Body.Offset, eventData.Body.Count);
 
-                    // Replace these two lines with your processing logic.
-                    log.LogInformation($"C# Event Hub trigger function processed a message: {messageBody}");
+        // Replace these two lines with your processing logic.
+        log.LogInformation($"C# Event Hub trigger function processed a message: {messageBody}");
 
-                    //refresh from app settings?
-                    superSecret = System.Environment.GetEnvironmentVariable("SuperSecret");
-                    // DISCLAIMER: Never log secrets. Just a demo :)
-                    log.LogInformation($"Shhhhh... it's a secret: {superSecret}");
+        //refresh from app settings?
+        superSecret = System.Environment.GetEnvironmentVariable("SuperSecret");
+        // DISCLAIMER: Never log secrets. Just a demo :)
+        log.LogInformation($"Shhhhh... it's a secret: {superSecret}");
 
-                    await Task.Yield();
-                }
-                catch (Exception e)
-                {
-                   //taken out for simplicity
-                }
-            }
+        await Task.Yield();
+    }
+    catch (Exception e)
+    {
+        //taken out for simplicity
+    }
+}
 ```
+
+Also, we don't need to refresh the secret for each event, but we're showing this just to make sure the Key Vault Metrics could show a high usage in the case that the metrics weren't accesible from the Function App Settings.
 
 When we are satisified with the test, we can clean up with the following az cli command:
 
