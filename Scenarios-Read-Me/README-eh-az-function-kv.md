@@ -123,7 +123,7 @@ $saID = $(az storage account show  -n mystorageaccount -g myResourceGroup --quer
 #get logging JSON.  Azure Key Vault has a category for AuditEvent
 $logJSON = '[ { "category": "AuditEvent", "enabled": true, "retentionPolicy": { "enabled": false, "days": 0 } } ]' | ConvertTo-Json
 
-#get logging JSON.  Azure Key Vault has a category for AllMetrics
+#get mettrics JSON.  Azure Key Vault has a category for AllMetrics
 $metricJSON = '[ { "category": "AllMetrics", "enabled": true, "retentionPolicy": { "enabled": false, "days": 0 } } ]' | ConvertTo-Json
 
 #add azure monitor diagnostic settings to point to key vault.  Use RootManageSharedAccessKey as the eventhub policy.
@@ -133,7 +133,8 @@ az monitor diagnostic-settings create --resource $kvID -n monitoring-my-kv --sto
 Another option is for Azure Monitor to stream to Event Hub.
 ```powershell
 #get event hub reference
-$ehID = $(az eventhubs eventhub show -g $rg --namespace-name $ehNamespace -n $ehName --query id --output tsv)
+az eventhubs eventhub create --resource-group myResourceGroup --namespace-name myehnamespace --name monitoring-sample --message-retention 4 --partition-count 15
+$ehID = $(az eventhubs eventhub show -g myResourceGroup --namespace-name myehnamespace -n monitoring-sample --query id --output tsv)
 
 #include event hub as well as storage for streaming from Azure Monitor for Logging + Metrics for Azure Key Vault
 az monitor diagnostic-settings create --resource $kvID -n monitoring-my-kv --event-hub $ehID --event-hub-rule RootManageSharedAccessKey --storage-account $saID --logs $logJSON --metrics $metricJSON
@@ -223,6 +224,40 @@ We should be able to see a payload similar to this in the JSON file.
 Of course, we can also send a batch of messages to Event Hub to trigger the Azure Function using [Service Bus Explorer](https://github.com/paolosalvatori/ServiceBusExplorer).
 
 ![Validate Azure Function with KV by sending Events to Event Hub with Service Bus Explorer](../Media/scenario-eh-az-function-kv/validate-6.png 'Validate Azure Function with KV by sending Events to Event Hub with Service Bus Explorer')
+
+Let's also double check that we see how the secrets are pulled into the [Event Hub Triggered Function](../EventHubTriggerCSharp1.cs).
+
+Since the app settings has a Key Vault reference, the function app will resolve this as part of scaling operations.  So we can pull in the cached value in the function.
+
+```C#
+//This will pull the secret from the environment variable.  In the case of a function app this will pull from the app settings.
+private static string superSecret = System.Environment.GetEnvironmentVariable("SuperSecret");
+```
+
+We can experiment with retrieving the cached secret.  Given that we have the Key Vault metrics stored, we can check the count for how often Key Vault is getting called.  Again, this could be verified with checking from Storage explorer.
+```C#
+ foreach (EventData eventData in events)
+            {
+                try
+                {
+                    string messageBody = Encoding.UTF8.GetString(eventData.Body.Array, eventData.Body.Offset, eventData.Body.Count);
+
+                    // Replace these two lines with your processing logic.
+                    log.LogInformation($"C# Event Hub trigger function processed a message: {messageBody}");
+
+                    //refresh from app settings?
+                    superSecret = System.Environment.GetEnvironmentVariable("SuperSecret");
+                    // DISCLAIMER: Never log secrets. Just a demo :)
+                    log.LogInformation($"Shhhhh... it's a secret: {superSecret}");
+
+                    await Task.Yield();
+                }
+                catch (Exception e)
+                {
+                   //taken out for simplicity
+                }
+            }
+```
 
 When we are satisified with the test, we can clean up with the following az cli command:
 

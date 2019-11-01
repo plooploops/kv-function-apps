@@ -73,7 +73,7 @@ $saID = $(az storage account show  -n $saName -g $rg --query id --output tsv)
 #get logging JSON.  Azure Key Vault has a category for AuditEvent
 $logJSON = '[ { "category": "AuditEvent", "enabled": true, "retentionPolicy": { "enabled": false, "days": 0 } } ]' | ConvertTo-Json
 
-#get logging JSON.  Azure Key Vault has a category for AllMetrics
+#get metrics JSON.  Azure Key Vault has a category for AllMetrics
 $metricJSON = '[ { "category": "AllMetrics", "enabled": true, "retentionPolicy": { "enabled": false, "days": 0 } } ]' | ConvertTo-Json
 
 #add azure monitor diagnostic settings to point to key vault.  Use RootManageSharedAccessKey as the eventhub policy.
