@@ -14,7 +14,7 @@ $kvSecretValue = 'My super secret!'
 $kvEHSecretName = 'EventHubConnection'
 $kvMonitorName = 'monitoring-my-kv'
 $ehName = "samples-workitems"
-$ehNamespace = "mynamespace"
+$ehNamespace = "mynamespace$RANDOM"
 
 #create an rg
 az group create -n $rg -l $location
