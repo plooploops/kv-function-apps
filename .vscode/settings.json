@@ -1,7 +1,10 @@
 {
-    "azureFunctions.deploySubpath": "bin/Release/netcoreapp2.1/publish",
-    "azureFunctions.projectLanguage": "C#",
+    "azureFunctions.deploySubpath": "Scenarios\\az-function-kv-send-eh-python",
+    "azureFunctions.projectLanguage": "Python",
     "azureFunctions.projectRuntime": "~2",
     "debug.internalConsoleOptions": "neverOpen",
-    "azureFunctions.preDeployTask": "publish"
+    "azureFunctions.preDeployTask": "publish",
+    "azureFunctions.scmDoBuildDuringDeployment": true,
+    "azureFunctions.pythonVenv": ".venv",
+    "python.formatting.provider": "yapf"
 }

@@ -57,13 +57,30 @@
         },
         {
             "type": "func",
-            "dependsOn": "build",
-            "options": {
-                "cwd": "${workspaceFolder}/bin/Debug/netcoreapp2.1"
-            },
             "command": "host start",
+            "problemMatcher": "$func-watch",
             "isBackground": true,
-            "problemMatcher": "$func-watch"
+            "dependsOn": "pipInstall",
+            "options": {
+                "cwd": "${workspaceFolder}/Scenarios\\az-function-kv-send-eh-python"
+            }
+        },
+        {
+            "label": "pipInstall",
+            "type": "shell",
+            "osx": {
+                "command": "${config:azureFunctions.pythonVenv}/bin/python -m pip install -r requirements.txt"
+            },
+            "windows": {
+                "command": "${config:azureFunctions.pythonVenv}\\Scripts\\python -m pip install -r requirements.txt"
+            },
+            "linux": {
+                "command": "${config:azureFunctions.pythonVenv}/bin/python -m pip install -r requirements.txt"
+            },
+            "problemMatcher": [],
+            "options": {
+                "cwd": "${workspaceFolder}/Scenarios\\az-function-kv-send-eh-python"
+            }
         }
     ]
 }
