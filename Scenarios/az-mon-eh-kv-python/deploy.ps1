@@ -12,11 +12,22 @@ $sendFaName = "mysendfunctionapp$RANDOM"
 $receiveFaName = "myreceivefunctionapp$RANDOM"
 $faEventHubAppConfig = "my_RootManageSharedAccessKey_EVENTHUB"
 $faStorageAccountConfig = "AzureWebJobsStorage"
+$faEHHostNameConfig = "EVENT_HUB_HOSTNAME" #should match environment variables used in application
+$faEHSasPolicyConfig = "EVENT_HUB_SAS_POLICY"
+$faEHSasKeyConfig = "EVENT_HUB_SAS_KEY"
+$faEHNameConfig = "EVENT_HUB_NAME"
 $kvName = "mykeyvault$RANDOM"
 $kvSecretName = 'SuperSecret'
 $kvSecretValue = 'My super secret!'
 $kvEHSecretName = 'EventHubConnection'
 $kvSASecretName = 'StorageAccountConnection'
+$kvEHHostNameSecretName = "EventHubHostName"
+$kvEHHostNameSecretValue = "$ehNamespace.servicebus.windows.net" #check this after
+$kvEHSasPolicyConfigName = "EventHubSasPolicy"
+$kvEHSasSecretValue = "RootManageSharedAccessKey"
+$kvEHSasKeyName = "EventHubSasKey"
+$kvEhName = "EventHubName"
+
 $kvMonitorName = 'monitoring-my-kv'
 $ehName = "alert-eh"
 $ehNamespace = "mynamespace$RANDOM"
@@ -49,7 +60,7 @@ $vmPublicIpAddressAllocation = "static"
 $vmSize = "Standard_DS2_v2"
 $vmAlertName = "$vmName-Alert"
 $usePushDeploy = $False #attempt to push function applications.  This assumes that we're able to resolve the network host from within VNET.
-
+$subscriptionID = $(az account show --query id -o tsv)
 #create an rg
 az group create -n $rg -l $location
 
@@ -173,14 +184,13 @@ az functionapp config appsettings set --name $receiveFaName --resource-group $rg
 
 #clean up.  for now broken out for clarity.
 Write-Host "Broken out secrets for EH in KV + Binding"
-$kvEHHostNameSecretValue = "$ehNamespace.servicebus.windows.net"
+
 az keyvault secret set --name $kvEHHostNameSecretName --value $kvEHHostNameSecretValue --description FunctionAppsecret  --vault-name $kvName
 $ehsecretURI = $(az keyvault secret show --name $kvEHHostNameSecretName --vault-name $kvName --query id --output tsv)
 
 az functionapp config appsettings set --name $sendFaName --resource-group $rg --settings "$faEHHostNameConfig=@Microsoft.KeyVault(SecretUri=$ehsecretURI) "
 az functionapp config appsettings set --name $receiveFaName --resource-group $rg --settings "$faEHHostNameConfig=@Microsoft.KeyVault(SecretUri=$ehsecretURI) "
 
-$kvEHSasSecretValue = "RootManageSharedAccessKey"
 az keyvault secret set --name $kvEHSasPolicyConfigName --value $kvEHSasSecretValue --description FunctionAppsecret  --vault-name $kvName
 $ehsecretURI = $(az keyvault secret show --name $kvEHSasPolicyConfigName --vault-name $kvName --query id --output tsv)
 
@@ -203,8 +213,7 @@ az functionapp config appsettings set --name $receiveFaName --resource-group $rg
 
 ## Make sure to use az login --use-device-code
 Write-Host "Attempt to deploy function apps"
-if ($usePushDeploy)
-{
+if ($usePushDeploy) {
     #Set Function App Settings for Deployment.
     #used for deployment.  For Azure DevOps, set this to false.  For zip deploy, set it to true.
     $faEnableOryxBuildConfig = "ENABLE_ORYX_BUILD"
@@ -234,15 +243,12 @@ if ($usePushDeploy)
         
         Write-Host "Check on send app deployments"
         Invoke-WebRequest -Uri "https://$sendFaName.scm.azurewebsites.net/api/deployments" -Method POST -Headers @{ "Authorization" = "Basic $auth" } -ContentType "application/json"
-    }
-    else 
-    {
+    } else {
         Write-Host "Did not find send function app zip"
     }
 
     $receiveFaZipPath = ".\az-mon-eh-receive-kv-python.zip"
-    if ($(Test-Path $receiveFaZipPath) -eq $True)
-    {
+    if ($(Test-Path $receiveFaZipPath) -eq $True) {
         Write-Host "Found the receive function app zip"
         $receivePublishProfileObject = $(az functionapp deployment list-publishing-profiles -n $receiveFaName -g $rg --query "[?publishMethod=='MSDeploy'].{userName:userName, userPWD:userPWD}" | ConvertFrom-Json)
         $userCred = $receivePublishProfileObject.userName + ":" + $receivePublishProfileObject.userPWD
@@ -252,14 +258,12 @@ if ($usePushDeploy)
         #check on the deployments
         Write-Host "Check on receive app deployments"
         Invoke-WebRequest -Uri "https://$receiveFaName.scm.azurewebsites.net/api/deployments" -Method POST -Headers @{ "Authorization" = "Basic $auth" } -ContentType "application/json"
-    }
-    else 
-    {
+    } else {
         Write-Host "Did not find receive function app zip"
     }
-}
-else
-{
+} else {
+    Write-Host "Publishing Send Function"
+
     #deploy azure function https://github.com/Azure/azure-functions-core-tools
 
     ##assumes that we're in a folder that has sub folders for each function
@@ -270,7 +274,6 @@ else
     ## .\scenario2\FunctionTrigger
     ## .\deploy.ps1
 
-    Write-Host "Publishing Send Function"
     Push-Location $sendFaFolder
     #might need to check if the publish was successful, or run twice?
     func azure functionapp publish $sendFaName
@@ -283,6 +286,23 @@ else
     func azure functionapp publish $receiveFaName
     Pop-Location
 }
+
+#add network restriction on function app for sender.
+Write-host "Add Azure Monitor Service Tags for Function App (Sender) to restrict inbound network access"
+$priority = 10
+$index = 0
+##load service tags from here: https://download.microsoft.com/download/7/1/D/71D86715-5596-4529-9B13-DA13A5DE5B63/ServiceTags_Public_20200106.json
+$azureMonitorServiceTags = Get-Content .\serviceTags.json
+$azureMonitorServiceTagsObject = $azureMonitorServiceTags | ConvertFrom-Json
+$azureMonitorServiceTagsObject.properties.addressPrefixes.ForEach({ 
+    az functionapp config access-restriction add -g $rg -n $sendFaName --rule-name "$ruleName-$index" --action Allow --ip-address $_ --priority $priority;
+    $priority += 10;
+    $index += 1;
+    Write-Host "Added Rule for $addressPrefix"
+})
+
+#similarly, we can also restrict SCM access too.
+###az functionapp config access-restriction add -g $rg -n $sendFaName --rule-name "Developer SCM" --action Allow --vnet-name $vnetName --subnet $vmSubnetName --ignore-missing-endpoint true --priority 250 --scm-site true
 
 #Add HTTP trigger for Action Group and Alert from Azure Monitor.  Need to have the Function Deployed first to get the function URL?
 
@@ -321,21 +341,3 @@ az vm stop --ids $vmId
 #wait for a minute to start up the VM again.
 sleep 60
 az vm start --ids $vmId
-
-
-#add network restriction on function app for sender.
-Write-host "Add Azure Monitor Service Tags for Function App (Sender) to restrict inbound network access"
-$priority = 10
-$index = 0
-##load service tags from here: https://download.microsoft.com/download/7/1/D/71D86715-5596-4529-9B13-DA13A5DE5B63/ServiceTags_Public_20200106.json
-$azureMonitorServiceTags = Get-Content .\serviceTags.json
-$azureMonitorServiceTagsObject = $azureMonitorServiceTags | ConvertFrom-Json
-$azureMonitorServiceTagsObject.properties.addressPrefixes.ForEach({ 
-    az functionapp config access-restriction add -g $rg -n $sendFaName --rule-name "$ruleName-$index" --action Allow --ip-address $_ --priority $priority;
-    $priority += 10;
-    $index += 1;
-    Write-Host "Added Rule for $addressPrefix"
-})
-
-#similarly, we can also restrict SCM access too.
-###az functionapp config access-restriction add -g $rg -n $sendFaName --rule-name "Developer SCM" --action Allow --vnet-name $vnetName --subnet $vmSubnetName --ignore-missing-endpoint true --priority 250 --scm-site true
