@@ -1,7 +1,7 @@
 
 #get a random lowercase string https://devblogs.microsoft.com/scripting/generate-random-letters-with-powershell/
 $RANDOM = $(-join ((97..122) | Get-Random -Count 5 | % {[char]$_}))
-$RANDOM = 'zsvph'
+$RANDOM = 'ixtmk'
 $rg = "myResourceGroup$RANDOM"
 $location = 'westus'
 $saName = "mystorageaccount$RANDOM"
@@ -54,7 +54,15 @@ $vnetAddressPrefix = "10.3.0.0/16"
 $subnetAddressPrefix = "10.3.0.0/24"
 $subnetName = "myAlertSubnet"
 $aseName = "myAse$RANDOM"
+$vmSubnetAddressPrefix = "10.3.1.0/24"
 $vmSubnetName = "default"
+
+#https://docs.microsoft.com/en-us/azure/app-service/environment/integrate-with-application-gateway
+$appGwSubnetAddressPrefix = "10.3.2.0/24"
+$appGwSubnetName = "myAppGwSubnet" #do not name to GatewaySubnet since this will prevent creation of VPN gateways.
+$appGwPrivateIp = "10.3.2.1"
+$appGwName = "myAppGw$RANDOM"
+
 #need to still script vm
 
 $usePushDeploy = $False #attempt to push function applications.  This assumes that we're able to resolve the network host for the ASE.
@@ -67,6 +75,9 @@ az group create -n $rg -l $location
 az network vnet create -g $rg -n $vnetName --address-prefixes $vnetAddressPrefix --subnet-name $subnetName --subnet-prefixes $subnetAddressPrefix
 $subnetID = $(az network vnet show -g $rg -n $vnetName --query "subnets[?name=='$subnetName'].id" -o tsv)
 
+$vmSubnetObject = $(az network vnet subnet create -g $rg --vnet-name $vnetName -n $vmSubnetName --address-prefixes $vmSubnetAddressPrefix) | ConvertFrom-Json
+
+
 #This subnet is hosting a VM.
 $defaultSubnetID = "/subscriptions/$subscriptionID/resourceGroups/$rg/providers/Microsoft.Network/virtualNetworks/$vnetName/subnets/$vmSubnetName"
 #this will take a while, maybe 4 hrs?
@@ -74,9 +85,16 @@ $aseOutput = $(az appservice ase create -n $aseName -g $rg --vnet-name $vnetName
 $aseObject = $(az appservice ase show -n $aseName -g $rg) | ConvertFrom-Json
 $aseInternalIP = $(az appservice ase list-addresses -n $aseName -g $rg --query internalIpAddress -o tsv)
 
+#create App GW w/ILB
+#https://docs.microsoft.com/en-us/azure/app-service/environment/integrate-with-application-gateway
+$appGwSubnetObject = $(az network vnet subnet create -g $rg --vnet-name $vnetName -n $appGwSubnetName --address-prefixes $appGwSubnetAddressPrefix) | ConvertFrom-Json
+
+###########az network application-gateway create -n $appGwName -g $rg -l $location --sku WAF_MEDIUM --capacity 2 --http-settings-port 443 --http-settings-protocol https --private-ip-address $appGwPrivateIP --public-ip-address-allocation 'Static' --subnet $appGwSubnetObject.id --servers $aseInternalIP
+$appGwObject = $(az network application-gateway create -n $appGwName -g $rg -l $location --sku WAF_MEDIUM --private-ip-address $appGwPrivateIP --public-ip-address-allocation 'Static' --subnet $appGwSubnetObject.id --servers $aseInternalIP) | ConvertFrom-Json
+
 # Create a storage account in the resource group.
 $saObject = $(az storage account create --name $saName --location $location --resource-group $rg --sku Standard_LRS | ConvertFrom-Json)
-az storage account network-rule add -g $rg -n $saName --subnet $subnetID
+
 
 #create app service plan and function for Sender
 Write-Host "Creating Function App for Sender"
@@ -112,8 +130,12 @@ $receiveSpID=$(az functionapp show --resource-group $rg --name $receiveFaName --
 Write-Host "Create Key Vault"
 $kvObject = $(az keyvault create --name $kvName --resource-group $rg --location $location | ConvertFrom-Json)
 #https://docs.microsoft.com/en-us/azure/key-vault/key-vault-network-security
+
+Write-Host "Add Service Endpoints"
 az network vnet subnet update --resource-group $rg --vnet-name $vnetName --name $subnetName --service-endpoints "Microsoft.KeyVault", "Microsoft.Storage", "Microsoft.EventHub"
 az network vnet subnet update --resource-group $rg --vnet-name $vnetName --name $vmSubnetName --service-endpoints "Microsoft.KeyVault", "Microsoft.Storage", "Microsoft.EventHub"
+
+az storage account network-rule add -g $rg -n $saName --subnet $subnetID
 
 #add subnet for kv?
 az keyvault network-rule add -g $rg -n $kvName --vnet $vnetName --subnet $subnetName
