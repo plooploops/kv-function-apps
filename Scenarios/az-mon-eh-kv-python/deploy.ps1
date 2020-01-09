@@ -2,7 +2,7 @@
 #get a random lowercase string https://devblogs.microsoft.com/scripting/generate-random-letters-with-powershell/
 $RANDOM = $(-join ((97..122) | Get-Random -Count 5 | % {[char]$_}))
 
-$RANDOM = "wtzao"
+#$RANDOM = "wtzao"
 $rg = "myResourceGroup$RANDOM"
 $location = 'westus'
 $saName = "mystorageaccount$RANDOM"
@@ -295,16 +295,20 @@ $faSendKey = $(az rest --method post --uri "$faSenderId/host/default/listKeys?ap
 
 $faHostName = $faSenderObject.defaultHostName
 $faSendURI = "https://$faHostName/$sendURIPath" + "?code=$faSendKey"
-#$faSendURI = "https://mysendfunctionappmagqs.azurewebsites.net/api/sendalerthttptrigger?code=3UDKzMxpmrt57FLAEkS712m83WOcWFSwyzuUvX0sBwycEAp9lLrWOA=="
+#$faSendURI = "https://sender.azurewebsites.net/api/sendalerthttptrigger?code=123=="
 ##az monitor action-group create -g $rg -n MyActionGroup --action NAME FUNCTION_APP_RESOURCE_ID FUNCTION_NAME HTTP_TRIGGER_URL [usecommonalertschema]
 $sendActionGroup = $(az monitor action-group create -g $rg -n $sendActionGroupName -a azurefunction $sendActionGroupReceiverName $faSenderObject.id $sendFuncName $faSendURI useCommonAlertSchema)
 $sendActionGroupObject = $sendActionGroup | ConvertFrom-Json
+
+Write-Host "Add Metric Alert for Storage Account"
 
 $saId = $(az storage account show -n $saName -g $rg --query id -o tsv)
 ##simpler metric alert on storage account.
 $saAlert = $(az monitor metrics alert create -n $saAlertName -g $rg --scopes $saId --evaluation-frequency 1m --window-size 1m --action $sendActionGroupObject.id --description "Storage Transactions" --condition "total transactions >= 0")
 
 $saAlert
+
+Write-Host "Add Metric Alert for VM"
 
 $vmId = $(az vm show -g $rg -n $vmName --query id -o tsv)
 $vmAlert = $(az monitor metrics alert create -n $vmAlertName -g $rg --scopes $vmId --evaluation-frequency 1m --window-size 1m --action $sendActionGroupObject.id --description "Percentage CPU Used" --condition "avg Percentage CPU >= 0")
