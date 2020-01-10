@@ -1,4 +1,3 @@
-
 #get a random lowercase string https://devblogs.microsoft.com/scripting/generate-random-letters-with-powershell/
 $RANDOM = $(-join ((97..122) | Get-Random -Count 5 | % {[char]$_}))
 
@@ -10,6 +9,20 @@ $sendAspName = "mySendPlan$RANDOM"
 $receiveAspName = "myReceivePlan$RANDOM"
 $sendFaName = "mysendfunctionapp$RANDOM"
 $receiveFaName = "myreceivefunctionapp$RANDOM"
+
+$kvMonitorName = 'monitoring-my-kv'
+$ehName = "alert-eh"
+$ehNamespace = "mynamespace$RANDOM"
+$ehConsumerGroup = "myconsumergroup"
+$sendFaFolder = "az-mon-eh-send-kv-python"
+$receiveFaFolder = "az-mon-eh-receive-kv-python"
+$sendFuncName = "SendAlertHttpTrigger"
+$sendURIPath = "api/$sendFuncName"
+$sendActionGroupName = "myAlertActionGroup"
+$sendActionGroupReceiverName = "myAGreceiver"
+$saAlertName = "myStorageAccountAlert"
+
+## KV configuration for apps
 $faEventHubAppConfig = "my_RootManageSharedAccessKey_EVENTHUB"
 $faStorageAccountConfig = "AzureWebJobsStorage"
 $faEHHostNameConfig = "EVENT_HUB_HOSTNAME" #should match environment variables used in application
@@ -27,18 +40,6 @@ $kvEHSasPolicyConfigName = "EventHubSasPolicy"
 $kvEHSasSecretValue = "RootManageSharedAccessKey"
 $kvEHSasKeyName = "EventHubSasKey"
 $kvEhName = "EventHubName"
-
-$kvMonitorName = 'monitoring-my-kv'
-$ehName = "alert-eh"
-$ehNamespace = "mynamespace$RANDOM"
-$ehConsumerGroup = "myconsumergroup"
-$sendFaFolder = "az-mon-eh-send-kv-python"
-$receiveFaFolder = "az-mon-eh-receive-kv-python"
-$sendFuncName = "SendAlertHttpTrigger"
-$sendURIPath = "api/$sendFuncName"
-$sendActionGroupName = "myAlertActionGroup"
-$sendActionGroupReceiverName = "myAGreceiver"
-$saAlertName = "myStorageAccountAlert"
 
 $vnetName = "myVnet$RANDOM"
 #be sure that the VNET address space doesn't have conflicts with existing VNETs address spaces in subscription
@@ -61,6 +62,26 @@ $vmSize = "Standard_DS2_v2"
 $vmAlertName = "$vmName-Alert"
 $usePushDeploy = $False #attempt to push function applications.  This assumes that we're able to resolve the network host from within VNET.
 $subscriptionID = $(az account show --query id -o tsv)
+
+#used to trigger azure monitor action groups (for webhooks, and with current testing, azure functions.)
+#https://docs.microsoft.com/en-us/azure/azure-monitor/platform/action-groups#webhook
+$azMonIPs = @(
+    "13.72.19.232", 
+    "13.106.57.181", 
+    "13.106.54.3", 
+    "13.106.54.19", 
+    "13.106.38.142", 
+    "13.106.38.148", 
+    "13.106.57.196", 
+    "13.106.57.197", 
+    "52.244.68.117", 
+    "52.244.65.137", 
+    "52.183.31.0", 
+    "52.184.145.166", 
+    "51.4.138.199", 
+    "51.5.148.86", 
+    "51.5.149.19")
+
 #create an rg
 az group create -n $rg -l $location
 
@@ -142,12 +163,13 @@ az functionapp config appsettings set --name $receiveFaName --resource-group $rg
 Write-Host "Create Event Hub Namespace and Event Hub"
 az eventhubs namespace create --resource-group $rg --name $ehNamespace --location $location
 
-az eventhubs namespace network-rule add -g $rg --namespace-name $ehNamespace --vnet $vnetName --subnet $subnetName
-az eventhubs namespace network-rule add -g $rg --namespace-name $ehNamespace --vnet $vnetName --subnet $receiveSubnetName
+az eventhubs namespace network-rule add --action Allow -g $rg --namespace-name $ehNamespace --vnet $vnetName --subnet $subnetName
+az eventhubs namespace network-rule add --action Allow -g $rg --namespace-name $ehNamespace --vnet $vnetName --subnet $receiveSubnetName
+az eventhubs namespace network-rule add --action Allow -g $rg --namespace-name $ehNamespace --vnet $vnetName --subnet $vmSubnetName
 
-az eventhubs namespace network-rule add --action Allow --ignore-missing-endpoint true --namespace-name $ehNamespace --resource-group $rg --subnet $subnetName --subscription $subscriptionID --vnet-name $vnetName
-az eventhubs namespace network-rule add --action Allow --ignore-missing-endpoint true --namespace-name $ehNamespace --resource-group $rg --subnet $receiveSubnetName --subscription $subscriptionID --vnet-name $vnetName
-az eventhubs namespace network-rule add --action Allow --ignore-missing-endpoint true --namespace-name $ehNamespace --resource-group $rg --subnet $vmSubnetName --subscription $subscriptionID --vnet-name $vnetName
+#az eventhubs namespace network-rule add --action Allow --ignore-missing-endpoint true --namespace-name $ehNamespace --resource-group $rg --subnet $subnetName --subscription $subscriptionID --vnet-name $vnetName
+#az eventhubs namespace network-rule add --action Allow --ignore-missing-endpoint true --namespace-name $ehNamespace --resource-group $rg --subnet $receiveSubnetName --subscription $subscriptionID --vnet-name $vnetName
+#az eventhubs namespace network-rule add --action Allow --ignore-missing-endpoint true --namespace-name $ehNamespace --resource-group $rg --subnet $vmSubnetName --subscription $subscriptionID --vnet-name $vnetName
 
 az eventhubs eventhub create --resource-group $rg --namespace-name $ehNamespace --name $ehName --message-retention 4 --partition-count 15
 az eventhubs eventhub consumer-group create --resource-group $rg --name $ehConsumerGroup --namespace-name $ehNamespace --eventhub-name $ehName
@@ -288,17 +310,18 @@ if ($usePushDeploy) {
 }
 
 #add network restriction on function app for sender.
+##the service tags for Azure Monitor aren't needed for now.  https://download.microsoft.com/download/7/1/D/71D86715-5596-4529-9B13-DA13A5DE5B63/ServiceTags_Public_20200106.json
+##Instead, we can reference https://docs.microsoft.com/en-us/azure/azure-monitor/platform/action-groups#webhook
 Write-host "Add Azure Monitor Service Tags for Function App (Sender) to restrict inbound network access"
 $priority = 10
 $index = 0
-##load service tags from here: https://download.microsoft.com/download/7/1/D/71D86715-5596-4529-9B13-DA13A5DE5B63/ServiceTags_Public_20200106.json
-$azureMonitorServiceTags = Get-Content .\serviceTags.json
-$azureMonitorServiceTagsObject = $azureMonitorServiceTags | ConvertFrom-Json
-$azureMonitorServiceTagsObject.properties.addressPrefixes.ForEach({ 
-    az functionapp config access-restriction add -g $rg -n $sendFaName --rule-name "$ruleName-$index" --action Allow --ip-address $_ --priority $priority;
+$ruleName = "AzureMonitorWebhookRule"
+$azMonIPs.ForEach({
+    $ipToAdd = "$_/32"; #this needs to use a /32 to add for the rule
+    az functionapp config access-restriction add -g $rg -n $sendFaName --rule-name "$ruleName-$index" --action Allow --ip-address $ipToAdd --priority $priority;
     $priority += 10;
     $index += 1;
-    Write-Host "Added Rule for $addressPrefix"
+    Write-Host "Added Rule for $_"
 })
 
 #similarly, we can also restrict SCM access too.
@@ -341,3 +364,6 @@ az vm stop --ids $vmId
 #wait for a minute to start up the VM again.
 sleep 60
 az vm start --ids $vmId
+
+sleep 600
+az vm stop --ids $vmId
