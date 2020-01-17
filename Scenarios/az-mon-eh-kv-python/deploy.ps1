@@ -51,6 +51,8 @@ $receiveSubnetName = "myAlertReceiveSubnet"
 $subnetAddressPrefix = "10.3.0.0/24"
 $subnetName = "myAlertSubnet"
 
+$trafficManagerProfile = "MyTmProfile"
+$trafficManagerEndpointName = "$sendFaName-$location"
 $vmSubnetAddressPrefix = "10.3.1.0/24"
 $vmSubnetName = "default"
 $vmAdminUserName = "myAdmin"
@@ -85,6 +87,7 @@ $azMonIPs = @(
 #create an rg
 az group create -n $rg -l $location
 
+#create VNET / subnets
 az network vnet create -g $rg -n $vnetName --address-prefixes $vnetAddressPrefix --subnet-name $subnetName --subnet-prefixes $subnetAddressPrefix
 $subnetID = $(az network vnet show -g $rg -n $vnetName --query "subnets[?name=='$subnetName'].id" -o tsv)
 
@@ -166,10 +169,6 @@ az eventhubs namespace create --resource-group $rg --name $ehNamespace --locatio
 az eventhubs namespace network-rule add --action Allow -g $rg --namespace-name $ehNamespace --vnet $vnetName --subnet $subnetName
 az eventhubs namespace network-rule add --action Allow -g $rg --namespace-name $ehNamespace --vnet $vnetName --subnet $receiveSubnetName
 az eventhubs namespace network-rule add --action Allow -g $rg --namespace-name $ehNamespace --vnet $vnetName --subnet $vmSubnetName
-
-#az eventhubs namespace network-rule add --action Allow --ignore-missing-endpoint true --namespace-name $ehNamespace --resource-group $rg --subnet $subnetName --subscription $subscriptionID --vnet-name $vnetName
-#az eventhubs namespace network-rule add --action Allow --ignore-missing-endpoint true --namespace-name $ehNamespace --resource-group $rg --subnet $receiveSubnetName --subscription $subscriptionID --vnet-name $vnetName
-#az eventhubs namespace network-rule add --action Allow --ignore-missing-endpoint true --namespace-name $ehNamespace --resource-group $rg --subnet $vmSubnetName --subscription $subscriptionID --vnet-name $vnetName
 
 az eventhubs eventhub create --resource-group $rg --namespace-name $ehNamespace --name $ehName --message-retention 4 --partition-count 15
 az eventhubs eventhub consumer-group create --resource-group $rg --name $ehConsumerGroup --namespace-name $ehNamespace --eventhub-name $ehName

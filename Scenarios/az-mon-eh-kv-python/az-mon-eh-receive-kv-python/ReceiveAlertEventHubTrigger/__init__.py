@@ -20,3 +20,4 @@ def main(event: func.EventHubEvent):
     #https://docs.microsoft.com/en-us/azure/azure-monitor/platform/alerts-common-schema-definitions
     for alert in alerts:
         [logging.info(f"Found alert Target ID: {alertTargetID}") for alertTargetID in alert['data']['essentials']['alertTargetIDs']]
+        #can make an API call here to send the alert elsewhere.

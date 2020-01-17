@@ -62,7 +62,7 @@
             "isBackground": true,
             "dependsOn": "pipInstall",
             "options": {
-                "cwd": "${workspaceFolder}/Scenarios\\az-function-kv-send-eh-python"
+                "cwd": "${workspaceFolder}/Scenarios\\az-mon-eh-kv-python\\az-mon-eh-receive-kv-python"
             }
         },
         {
@@ -79,7 +79,7 @@
             },
             "problemMatcher": [],
             "options": {
-                "cwd": "${workspaceFolder}/Scenarios\\az-function-kv-send-eh-python"
+                "cwd": "${workspaceFolder}/Scenarios\\az-mon-eh-kv-python\\az-mon-eh-receive-kv-python"
             }
         }
     ]

@@ -6,7 +6,7 @@
       "name": "event",
       "direction": "in",
       "eventHubName": "alert-eh",
-      "connection": "my_RootManageSharedAccessKey_EVENTHUB",
+      "connection": "RootManageSharedAccessKey_EVENTHUB",
       "cardinality": "many",
       "consumerGroup": "myconsumergroup"
     }

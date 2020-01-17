@@ -1,2 +1,2 @@
 azure-functions
-azure.eventhub
+azure.eventhub==1.3.3

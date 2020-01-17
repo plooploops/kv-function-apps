@@ -8,3 +8,4 @@ To get started:
 
 2. Run Samples
     - [Event Hub Trigger Azure Function with Key Vault Integration](Scenarios-Read-Me/README-eh-az-function-kv.md)
+    - [Azure Monitor Alerts with Azure Functions, Event Hub, and Key Vault Integration](Scenarios-Read-Me/README-az-mon-eh-kv-python.md)
