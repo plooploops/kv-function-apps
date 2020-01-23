@@ -105,14 +105,14 @@ $defaultSubnetID = "/subscriptions/$subscriptionID/resourceGroups/$rg/providers/
 az vm create --image $vmImage --admin-username $vmAdminUserName --admin-password $vmAdminPassword -l $location -g $rg -n $vmName --subnet $defaultSubnetID --public-ip-address-allocation $vmPublicIpAddressAllocation --size $vmSize
 
 # Create a storage account in the resource group.
-az storage account create --name $saName --location $location --resource-group $rg --sku Standard_LRS
+az storage account create --name $saName --location $location --resource-group $rg --sku Standard_LRS --default-action deny
 az storage account network-rule add -g $rg -n $saName --subnet $subnetID
 az storage account network-rule add -g $rg -n $saName --subnet $receiveSubnetObject.id
 
 #create app service plan and function for Sender
 Write-Host "Creating Function App for Sender"
 az appservice plan create --name $sendAspName --resource-group $rg --sku P2V2 --is-linux
-az functionapp create --name $sendFaName --resource-group $rg --plan $sendAspName --storage-account $saName --os-type Linux --runtime python --runtime-version 3.7
+$sendFaObject = $(az functionapp create --name $sendFaName --resource-group $rg --plan $sendAspName --storage-account $saName --os-type Linux --runtime python --runtime-version 3.7) | ConvertFrom-Json
 az functionapp vnet-integration add -g $rg -n $sendFaName --vnet $vnetName --subnet $subnetName
 
 az functionapp identity assign --name $sendFaName --resource-group $rg
@@ -120,7 +120,7 @@ az functionapp identity assign --name $sendFaName --resource-group $rg
 #create app service plan and function for Receiver
 Write-Host "Creating Function App for Receiver"
 az appservice plan create --name $receiveAspName --resource-group $rg --sku P2V2 --is-linux
-az functionapp create --name $receiveFaName --resource-group $rg --plan $receiveAspName --storage-account $saName --os-type Linux --runtime python --runtime-version 3.7
+$receiveFaObject = $(az functionapp create --name $receiveFaName --resource-group $rg --plan $receiveAspName --storage-account $saName --os-type Linux --runtime python --runtime-version 3.7) | ConvertFrom-Json
 #need a separate subnet to avoid conflict with hosting another function app.
 az functionapp vnet-integration add -g $rg -n $receiveFaName --vnet $vnetName --subnet $receiveSubnetName
 
@@ -140,6 +140,15 @@ az keyvault create --name $kvName --resource-group $rg --location $location
 az keyvault network-rule add -g $rg -n $kvName --vnet $vnetName --subnet $subnetName
 az keyvault network-rule add -g $rg -n $kvName --vnet $vnetName --subnet $vmSubnetName
 az keyvault network-rule add -g $rg -n $kvName --vnet $vnetName --subnet $receiveSubnetName
+
+#combine outbound ip addresses from function apps.
+$outboundIpAddresses = $sendFaObject.possibleOutboundIpAddresses.split(",") + $receiveFaObject.possibleOutboundIpAddresses.split(",") | Select-Object -Unique
+
+##for kv also need to add possible outbound ip addresses for functions to reach this key vault
+Write-Host "Add Outbound IP Addresses for Functions to reach KV"
+$outboundIpAddresses.forEach({
+    az keyvault network-rule add -g $rg -n $kvName --ip-address $_
+})
 
 #create a secret for Key Vault
 Write-Host "Create Key Vault Secrets"
@@ -231,6 +240,10 @@ $ehsecretURI = $(az keyvault secret show --name $kvEhName --vault-name $kvName -
 
 az functionapp config appsettings set --name $sendFaName --resource-group $rg --settings "$faEHNameConfig=@Microsoft.KeyVault(SecretUri=$ehsecretURI) "
 az functionapp config appsettings set --name $receiveFaName --resource-group $rg --settings "$faEHNameConfig=@Microsoft.KeyVault(SecretUri=$ehsecretURI) "
+
+### Finish KV local management, set to deny now.
+Write-Host "Update Keyvault to Default-Action Deny."
+az keyvault update -n $kvname -g $rg --default-action "deny"
 
 ## Make sure to use az login --use-device-code
 Write-Host "Attempt to deploy function apps"

@@ -57,6 +57,7 @@ These will describe some of the concepts that we're using in this scenario.
 1. [Azure Storage Account Service Endpoints](https://docs.microsoft.com/en-us/azure/storage/common/storage-network-security?toc=%2fazure%2fvirtual-network%2ftoc.json#grant-access-from-a-virtual-network)
 1. [Azure Key Vault Service Endpoints](https://docs.microsoft.com/en-us/azure/key-vault/key-vault-overview-vnet-service-endpoints)
 1. [Azure Key Vault Network Security](https://docs.microsoft.com/en-us/azure/key-vault/key-vault-network-security)
+1. [Azure Key Vault Az CLI](https://docs.microsoft.com/en-us/cli/azure/keyvault?view=azure-cli-latest#az-keyvault-update)
 1. [Azure App Service with Key Vault References](https://docs.microsoft.com/en-us/azure/app-service/app-service-key-vault-references#granting-your-app-access-to-key-vault)
 1. [Azure App Service Environment](https://docs.microsoft.com/en-us/azure/app-service/environment/app-service-app-service-environment-network-architecture-overview)
 
@@ -107,11 +108,11 @@ $defaultSubnetID = "/subscriptions/$subscriptionID/resourceGroups/$rg/providers/
 az vm create --image $vmImage --admin-username $vmAdminUserName --admin-password $vmAdminPassword -l $location -g $rg -n $vmName --subnet $defaultSubnetID --public-ip-address-allocation $vmPublicIpAddressAllocation --size $vmSize
 ```
 
-We can now add a storage account for the Azure Functions.  This storage account must have blob containers for syncing Azure Functions.  We'll also add in network rules to allow access to the subnets hosting our Azure Functions.
+We can now add a storage account for the Azure Functions.  This storage account must have blob containers for syncing Azure Functions.  We'll also add in network rules to allow access to the subnets hosting our Azure Functions.  We'll also set the default-action to deny so that only allowed networks can access the storage account.
 
 ```powershell
 # Create a storage account in the resource group.
-az storage account create --name $saName --location $location --resource-group $rg --sku Standard_LRS
+az storage account create --name $saName --location $location --resource-group $rg --sku Standard_LRS --default-action deny
 az storage account network-rule add -g $rg -n $saName --subnet $subnetID
 az storage account network-rule add -g $rg -n $saName --subnet $receiveSubnetObject.id
 ```
@@ -122,14 +123,14 @@ We'll now stand up both the sender and receiver function apps.  We'll use the Ap
 ```powershell
 #create app service plan and function for Sender
 az appservice plan create --name $sendAspName --resource-group $rg --sku P2V2 --is-linux
-az functionapp create --name $sendFaName --resource-group $rg --plan $sendAspName --storage-account $saName --os-type Linux --runtime python --runtime-version 3.7
+$sendFaObject = $(az functionapp create --name $sendFaName --resource-group $rg --plan $sendAspName --storage-account $saName --os-type Linux --runtime python --runtime-version 3.7) | ConvertFrom-Json
 az functionapp vnet-integration add -g $rg -n $sendFaName --vnet $vnetName --subnet $subnetName
 
 az functionapp identity assign --name $sendFaName --resource-group $rg
 
 #create app service plan and function for Receiver
 az appservice plan create --name $receiveAspName --resource-group $rg --sku P2V2 --is-linux
-az functionapp create --name $receiveFaName --resource-group $rg --plan $receiveAspName --storage-account $saName --os-type Linux --runtime python --runtime-version 3.7
+$receiveFaObject = $(az functionapp create --name $receiveFaName --resource-group $rg --plan $receiveAspName --storage-account $saName --os-type Linux --runtime python --runtime-version 3.7) | ConvertFrom-Json
 #need a separate subnet to avoid conflict with hosting another function app.
 az functionapp vnet-integration add -g $rg -n $receiveFaName --vnet $vnetName --subnet $receiveSubnetName
 
@@ -146,6 +147,7 @@ $receiveSpID=$(az functionapp show --resource-group $rg --name $receiveFaName --
 ```
 
 We'll create a Key Vault.  We'll also add network rules to allow access to the placeholder subnets.
+> A workaround for Function Apps w/VNET Integration is that we'll want to also allow the possible outbound ip addresses to reach the Key Vault.  We'll also **later** set the default-action to deny once we configure key vault secrets.
 
 We can also add in a test secret, and then add a policy on Key Vault to allow access to the Service Principals (Managed Identities) for the Azure Functions.
 
@@ -156,6 +158,15 @@ az keyvault create --name $kvName --resource-group $rg --location $location
 az keyvault network-rule add -g $rg -n $kvName --vnet $vnetName --subnet $subnetName
 az keyvault network-rule add -g $rg -n $kvName --vnet $vnetName --subnet $vmSubnetName
 az keyvault network-rule add -g $rg -n $kvName --vnet $vnetName --subnet $receiveSubnetName
+
+#combine outbound ip addresses from function apps.
+$outboundIpAddresses = $sendFaObject.possibleOutboundIpAddresses.split(",") + $receiveFaObject.possibleOutboundIpAddresses.split(",") | Select-Object -Unique
+
+##for kv also need to add possible outbound ip addresses for functions to reach this key vault
+Write-Host "Add Outbound IP Addresses for Functions to reach KV"
+$outboundIpAddresses.forEach({
+    az keyvault network-rule add -g $rg -n $kvName --ip-address $_
+})
 
 #create a secret for Key Vault
 az keyvault secret set --name $kvSecretName --value $kvSecretValue --description FunctionAppsecret  --vault-name $kvName
@@ -252,6 +263,14 @@ $ehsecretURI = $(az keyvault secret show --name $kvEhName --vault-name $kvName -
 
 az functionapp config appsettings set --name $sendFaName --resource-group $rg --settings "$faEHNameConfig=@Microsoft.KeyVault(SecretUri=$ehsecretURI) "
 az functionapp config appsettings set --name $receiveFaName --resource-group $rg --settings "$faEHNameConfig=@Microsoft.KeyVault(SecretUri=$ehsecretURI) "
+```
+
+Once we are done managing secrets with Key Vault (from our deployment environment), we can set the default-action on the key vault to deny.
+
+> We can also set default-action to deny on key vault creation.  However, this means that we should also include the host IP for managing secrets.
+
+```powershell
+az keyvault update -n $kvname -g $rg --default-action "deny"
 ```
 
 We can now attempt to deploy the Azure Functions to the function app.  While there are multiple [Azure Functions Deployment Options](https://docs.microsoft.com/en-us/azure/azure-functions/functions-deployment-technologies), for simplicity, we'll use the [Azure Functions Python Core Tools](https://docs.microsoft.com/en-us/azure/azure-functions/functions-reference-python#publishing-to-azure) to deploy the function app.  This will attempt to build the function remotely based off the local bits.
@@ -541,13 +560,13 @@ We can check that Event Hub allows access to our subnets in the Firewall and Vir
 
 We can check that Key Vault allows access to our subnets in the Firewall and Virtual Network settings.
 ![Validate Key Vault Subnet Access In Portal](../Media/scenario-az-mon-eh-kv-python/validate-9.png 'Validate Key Vault Subnet Access In Portal')
-> During the deployment this shows as 'all networks'.  However, when we click on 'selected networks', the network rules appear.  This merits **further investigation** to validate the scenario.  In the case that Azure Functions cannot resolve the Key Vault Reference due to IP filtering, we can add the **outbound IP addresses** associated with the Azure Functions that need to reach Azure Key Vault as a **workaround**.
+> In the case that Azure Functions cannot resolve the Key Vault Reference due to IP filtering, we can add the **outbound IP addresses** associated with the Azure Functions that need to reach Azure Key Vault as a **workaround**.
 ![Get Outbound IPs for Azure Function In Portal](../Media/scenario-az-mon-eh-kv-python/outbound-ips.png 'Get Outbound IPs for Azure Function In Portal')
 > With Premium Azure Functions, the outbound IP addresses can **possibly change** and are **not dedicated** to the Azure Function; should we want **dedicated outbound IP addresses**, we should look into hosting the Azure Function in an [App Service Environment](https://docs.microsoft.com/en-us/azure/app-service/environment/app-service-app-service-environment-network-architecture-overview).
 
 We can check that Storage Account allows access to our subnets in the Firewall and Virtual Network settings.
 ![Validate Storage Account Subnet Access In Portal](../Media/scenario-az-mon-eh-kv-python/validate-10.png 'Validate Storage Account Subnet Access In Portal')
-> During the deployment this shows as 'all networks'.  However, when we click on 'selected networks', the network rules appear.  This merits **further investigation** to validate the scenario.  If the Azure Function doesn't have access to the storage account, then the function runtime will have an error starting.  The subnet reference should be sufficient in this case.
+> If the Azure Function doesn't have access to the storage account, then the function runtime will have an error starting.  The subnet reference should be sufficient in this case.
 
 We can check that Receiver Azure Function by clicking on Monitor.  We can see prior triggers and whether they were successful.
 ![Validate Receiver Azure Function In Portal](../Media/scenario-az-mon-eh-kv-python/validate-11.png 'Validate Receiver Azure Function In Portal')
@@ -569,6 +588,6 @@ az group delete -n $rg
 
 ### Additional Notes
 
-While this is an example for how we can use VNET integration, IP Filtering, Event Hubs, Key Vault, and Azure Functions to work with Azure Monitor, the base idea can work.  Of course, additional lockdown details should be explored for real-world scenarios.
+While this is an example for how we can use VNET integration, IP Filtering, Event Hubs, Key Vault, and Azure Functions to work with Azure Monitor, this is simply a POC to show how this can work together.  Of course, additional lockdown details should be explored for real-world scenarios.
 
-We can look into redundancy / geo-replication if required. The base deployment should be evaluated to see if it's suitable or can be adjusted for a given scenario, and then base stamp can be deployed for potential geo-replication scenarios.
+We can look into redundancy / geo-replication if required. The base deployment should be evaluated to see if it's suitable or can be adjusted for a given scenario, and then the base stamp can be deployed for potential geo-replication scenarios.
