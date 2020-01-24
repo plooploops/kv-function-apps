@@ -1,6 +1,6 @@
 ## Azure Monitor Alerts with Azure Functions, Event Hub, and Key Vault Integration
 
-The goal is to able to take [Azure Monitor Alerts](https://docs.microsoft.com/en-us/azure/azure-monitor/platform/alerts-overview) with [Common Alert Schema Definitions](https://docs.microsoft.com/en-us/azure/azure-monitor/platform/alerts-common-schema-definitions) and to be able to transform the alert.
+The goal is to be able to take [Azure Monitor Alerts](https://docs.microsoft.com/en-us/azure/azure-monitor/platform/alerts-overview) with [Common Alert Schema Definitions](https://docs.microsoft.com/en-us/azure/azure-monitor/platform/alerts-common-schema-definitions) and to be able to transform the alert.
 
 We can use [Azure Monitor Action Groups](https://docs.microsoft.com/en-us/azure/azure-monitor/platform/action-groups) to point to our 'sender' Azure Function.
 
@@ -117,7 +117,7 @@ az storage account network-rule add -g $rg -n $saName --subnet $subnetID
 az storage account network-rule add -g $rg -n $saName --subnet $receiveSubnetObject.id
 ```
 
-We'll now stand up both the sender and receiver function apps.  We'll use the App service plan as the location for the function app, and we'll need  to ensure we're using the [Azure Functions Premium Plan](https://docs.microsoft.com/en-us/azure/azure-functions/functions-scale#premium-plan). Further, since we're using [Python Azure Functions Python](https://docs.microsoft.com/en-us/azure/azure-functions/functions-reference-python#publishing-to-azure), we'll need to use a **Linux** host.  We can add [VNET Integration](https://docs.microsoft.com/en-us/azure/azure-functions/functions-networking-options#virtual-network-integration) to point to the placeholder subnets created earlier, and also add in a [Managed Identity](https://docs.microsoft.com/en-us/azure/app-service/overview-managed-identity) for the function.  This Managed Identity will be used for retrieving secrets from [Key Vault](https://docs.microsoft.com/en-us/azure/app-service/app-service-key-vault-references#granting-your-app-access-to-key-vault).
+We'll now stand up both the sender and receiver function apps.  We'll use the App service plan as the location for the function app, and we'll need to ensure we're using the [Azure Functions Premium Plan](https://docs.microsoft.com/en-us/azure/azure-functions/functions-scale#premium-plan). Further, since we're using [Python Azure Functions Python](https://docs.microsoft.com/en-us/azure/azure-functions/functions-reference-python#publishing-to-azure), we'll need to use a **Linux** host.  We can add [VNET Integration](https://docs.microsoft.com/en-us/azure/azure-functions/functions-networking-options#virtual-network-integration) to point to the placeholder subnets created earlier, and also add in a [Managed Identity](https://docs.microsoft.com/en-us/azure/app-service/overview-managed-identity) for the function.  This Managed Identity will be used for retrieving secrets from [Key Vault](https://docs.microsoft.com/en-us/azure/app-service/app-service-key-vault-references#granting-your-app-access-to-key-vault).
 
 
 ```powershell
@@ -147,7 +147,7 @@ $receiveSpID=$(az functionapp show --resource-group $rg --name $receiveFaName --
 ```
 
 We'll create a Key Vault.  We'll also add network rules to allow access to the placeholder subnets.
-> A workaround for Function Apps w/VNET Integration is that we'll want to also allow the possible outbound ip addresses to reach the Key Vault.  We'll also **later** set the default-action to deny once we configure key vault secrets.
+> A workaround for Function Apps w/VNET Integration is that we'll want to also allow the possible outbound ip addresses to reach the Key Vault.  We'll also **later** set the default-action to deny once we configure key vault secrets.  Also, note that the possible outbound ip addresses can change.  If these need to be further constrained to a single guaranteed IP address, we'll want to consider hosting the Azure Function in an [Azure App Service Environment](https://docs.microsoft.com/en-us/azure/app-service/environment/app-service-app-service-environment-network-architecture-overview).
 
 We can also add in a test secret, and then add a policy on Key Vault to allow access to the Service Principals (Managed Identities) for the Azure Functions.
 
@@ -265,7 +265,7 @@ az functionapp config appsettings set --name $sendFaName --resource-group $rg --
 az functionapp config appsettings set --name $receiveFaName --resource-group $rg --settings "$faEHNameConfig=@Microsoft.KeyVault(SecretUri=$ehsecretURI) "
 ```
 
-Once we are done managing secrets with Key Vault (from our deployment environment), we can set the default-action on the key vault to deny.
+Once we are done managing secrets with Key Vault (from our deployment environment), we can now set the default-action on the key vault to deny.
 
 > We can also set default-action to deny on key vault creation.  However, this means that we should also include the host IP for managing secrets.
 
