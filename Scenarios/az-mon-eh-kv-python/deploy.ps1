@@ -245,6 +245,8 @@ az functionapp config appsettings set --name $receiveFaName --resource-group $rg
 Write-Host "Update Keyvault to Default-Action Deny."
 az keyvault update -n $kvname -g $rg --default-action "deny"
 
+az storage account update -n $saName -g $rg --default-action "deny"
+
 ## Make sure to use az login --use-device-code
 Write-Host "Attempt to deploy function apps"
 if ($usePushDeploy) {
