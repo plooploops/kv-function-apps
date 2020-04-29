@@ -42,7 +42,7 @@ These will describe some of the concepts that we're using in this scenario.
 1. [Azure Monitor Common Alert Schema Definitions](https://docs.microsoft.com/en-us/azure/azure-monitor/platform/alerts-common-schema-definitions)
 1. [Azure Monitor Action Groups](https://docs.microsoft.com/en-us/azure/azure-monitor/platform/action-groups)
 1. [Azure Monitor Webhooks](https://docs.microsoft.com/en-us/azure/azure-monitor/platform/action-groups#webhook)
-1. [Azure Functions Authentication Options](https://docs.microsoft.com/en-us/azure/app-service/app-service-authentication-how-to?toc=%2fazure%2fazure-functions%2ftoc.json)]
+1. [Azure Functions Authentication Options](https://docs.microsoft.com/en-us/azure/app-service/app-service-authentication-how-to?toc=%2fazure%2fazure-functions%2ftoc.json)
 1. [Azure Functions Deployment Options](https://docs.microsoft.com/en-us/azure/azure-functions/functions-deployment-technologies)
 1. [Azure Functions Premium Plan](https://docs.microsoft.com/en-us/azure/azure-functions/functions-scale#premium-plan)
 1. [Azure Functions VNET Integration Options](https://docs.microsoft.com/en-us/azure/azure-functions/functions-networking-options#virtual-network-integration)
